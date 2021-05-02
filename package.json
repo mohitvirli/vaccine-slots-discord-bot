@@ -1,0 +1,25 @@
+{
+  "name": "vaccine-slots-discord-bot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mohitvirli/vaccine-slots-discord-bot.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/mohitvirli/vaccine-slots-discord-bot/issues"
+  },
+  "homepage": "https://github.com/mohitvirli/vaccine-slots-discord-bot#readme",
+  "dependencies": {
+    "axios": "^0.21.1",
+    "discord.js": "^12.5.3",
+    "dotenv": "^8.2.0",
+    "moment": "^2.29.1"
+  }
+}
