@@ -66,8 +66,8 @@ bot.on('message', msg => {
       axios.get("https://cdn-api.co-vin.in/api/v2/appointment/sessions/public/calendarByPin", { params })
         .then(res => res.data)
         .then(res => {
-          const ageLimitCheck = a => a.min_age_limit !== 45;
-          const availableCenters = res.centers.filter(center => center.sessions.find(ageLimitCheck));
+          const availabilityCheck = a => a.min_age_limit !== 45 && a.available_capacity !== 0;
+          const availableCenters = res.centers.filter(center => center.sessions.find(availabilityCheck));
 
           const embedMessage = {
             color: 0x81b214,
@@ -101,10 +101,10 @@ bot.on('message', msg => {
               }];
 
               center.sessions
-                .filter(ageLimitCheck)
+                .filter(availabilityCheck)
                 .forEach(ses => {
                   embedMessage.fields.push({
-                    name: moment(ses.date).format('D MMM YYYY'),
+                    name: `${moment(ses.date).format('D MMM YYYY')} (${ses.available_capacity} Slots)`,
                     value: ses.slots.join(', '),
                     inline: true,
                   });
