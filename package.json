@@ -17,9 +17,9 @@
   },
   "homepage": "https://github.com/mohitvirli/vaccine-slots-discord-bot#readme",
   "dependencies": {
-    "axios": "^0.21.1",
     "discord.js": "^12.5.3",
     "dotenv": "^8.2.0",
+    "https": "^1.0.0",
     "moment": "^2.29.1"
   }
 }

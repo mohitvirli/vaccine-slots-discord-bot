@@ -3,8 +3,8 @@ const Discord = require('discord.js');
 const moment = require('moment');
 const bot = new Discord.Client();
 const TOKEN = process.env.TOKEN;
-const INTERVAL = process.env.INTERVAL;
-const axios = require('axios');
+const INTERVAL = process.env.INTERVAL || 5000;
+const https = require('https');
 
 /**
  * Maintain the polling interval for each PIN code.
@@ -63,9 +63,7 @@ bot.on('message', msg => {
       if (!first) console.log('Polling for', pincode);
       const pollingStarted = !!pollIntervals[pincode];
 
-      axios.get("https://cdn-api.co-vin.in/api/v2/appointment/sessions/public/calendarByPin", { params })
-        .then(res => res.data)
-        .then(res => {
+      getCenters(params, res => {
           const availabilityCheck = a => a.min_age_limit !== 45 && a.available_capacity !== 0;
           const availableCenters = res.centers.filter(center => center.sessions.find(availabilityCheck));
 
@@ -115,31 +113,30 @@ bot.on('message', msg => {
               pollIntervals[pincode] = null;
             })
           }
-        })
-        .catch(err => console.log(err));
+        });
+    }
+
+    if (pollClear !== 'clear') {
+      getList(true);
+
+      if (!pollIntervals[pincode]) {
+        pollIntervals[pincode] = setInterval(getList, INTERVAL);
       }
+    } else {
+      if (pollIntervals[pincode]) {
+        msg.channel.send({embed: {
+          description: `Cleared Polling for ${pincode}`,
+        }});
 
-      if (pollClear !== 'clear') {
-        getList(true);
-
-        if (!pollIntervals[pincode]) {
-          pollIntervals[pincode] = setInterval(getList, INTERVAL);
-        }
+        clearInterval(pollIntervals[pincode]);
+        pollIntervals[pincode] = null;
       } else {
-        if (pollIntervals[pincode]) {
-          msg.channel.send({embed: {
-            description: `Cleared Polling for ${pincode}`,
-          }});
-
-          clearInterval(pollIntervals[pincode]);
-          pollIntervals[pincode] = null;
-        } else {
-          msg.channel.send({embed: {
-            description: `No polling started for ${pincode}, wyd even?`,
-          }});
-        }
+        msg.channel.send({embed: {
+          description: `No polling started for ${pincode}, wyd even?`,
+        }});
       }
     }
+  }
 });
 
 /**
@@ -155,4 +152,45 @@ function argCheckValid(message) {
   if (arg3 && arg3 !== 'clear') return false;
 
   return true;
+}
+
+/**
+ * Using native https request to get the list of centers.
+ *
+ * @param params The URL params.
+ * @param callback The callback function.
+ */
+function getCenters(params, callback) {
+  const url = new URL('https://cdn-api.co-vin.in/api/v2/appointment/sessions/public/calendarByPin');
+
+  // Set the url params.
+  Object.keys(params).forEach(key => url.searchParams.set(key, params[key]));
+
+  const options = {
+    hostname: url.hostname,
+    port: 443,
+    path: `${url.pathname}${url.search}`,
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    }
+  };
+
+  // Make the API call.
+  const req = https.request(options, res => {
+    res.setEncoding('utf8')
+    let response;
+
+    res.on('data', res => response = res);
+
+    res.on('end', d => {
+      callback(JSON.parse(response));
+    })
+  });
+
+  req.on('error', error => {
+    console.error(error);
+  });
+
+  req.end();
 }
