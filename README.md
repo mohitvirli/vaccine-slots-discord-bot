@@ -1,6 +1,6 @@
 # vaccine-slots-discord-bot :eyes: 
 
-Add a bot to know if the covid vaccination slots are available for 18+. I hope this helps in these dire times.
+Add a bot to know if the covid vaccination slots are available for 18+ with simple commands like `-vaccine 560103` or `-vaccine karnataka udupi`. I hope this helps in these dire times. 
 
  - If you are brand new to creating discord bot refer this [Sitepoint tutorial](https://www.sitepoint.com/discord-bot-node-js/)
  - If you do know how to create a bot you would just need the discord server credentials.
@@ -22,20 +22,18 @@ Add a bot to know if the covid vaccination slots are available for 18+. I hope t
         INTERVAL=10000
    ```
 3. Run `node index.js` (Need to run this for the time you need polling for)
-4. Go to discord channel to test the bot.
+4. Go to your discord channel to test the bot.
 
 ## Usage
 Use the `-vaccine` message in the channel you want to recieve the notification in.
-#### Normal usage `-vaccine [pincode] [clear]`
-- `-vaccine` or `-vaccine help`
-<br />![image](https://user-images.githubusercontent.com/11966122/116817266-18331b00-ab83-11eb-8875-89c90ede4020.png)
-- `vaccine 560103`
-<br />![image](https://user-images.githubusercontent.com/11966122/116817177-cb4f4480-ab82-11eb-9c9e-d8cabce0bc70.png)
-- If you run the command again for the same PIN `-vaccine 560103`
-<br />![image](https://user-images.githubusercontent.com/11966122/116817340-7829c180-ab83-11eb-9b2e-a88dcca80fbf.png)
-- If anything's found (good luck) like `-vaccine 302018`
-<br />![image](https://user-images.githubusercontent.com/11966122/116817367-a5766f80-ab83-11eb-9988-f40e0f60f484.png)
-- Clear the polling if you do not want to. `-vaccine 560103 clear` 
+#### Normal usage `-vaccine [clear] | [pincode] | [state district]`
+- `-vaccine`
+<br /><img src="https://user-images.githubusercontent.com/11966122/118185312-04789600-b45a-11eb-94c8-f52444f77188.png" width="400">
+- `-vaccine 560103` or `-vaccine karnataka bbmp` or `-vaccine rajasthan jaipur`
+<br /><img src="https://user-images.githubusercontent.com/11966122/118185916-b7e18a80-b45a-11eb-8d0b-dff11d8eb884.png" width="350">
+- If anything's found (good luck) like `-vaccine 560034`
+<br /><img src="https://user-images.githubusercontent.com/11966122/118186303-35a59600-b45b-11eb-8b8c-9f2246da2c55.png" width="400">
+- Clear the polling if you do not want to. `-vaccine clear 560103` or `-vaccine clear karnataka bangalore urban` 
 <br />![image](https://user-images.githubusercontent.com/11966122/116817406-cd65d300-ab83-11eb-8c37-5d2f0aa1b90e.png)
 
 ## Future Notes
