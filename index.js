@@ -22,6 +22,11 @@ const pollStats = {};
 const oldPollStats = {};
 
 /**
+ * Stores the states data for the session.
+ */
+let statesData;
+
+/**
  * Login
  */
 bot.login(TOKEN);
@@ -40,21 +45,26 @@ bot.on('message', msg => {
   const val = msg.content;
 
   if (val.startsWith('-vaccine')) {
-    const pincode = val.split(' ')[1];
-    const pollClear = val.split(' ')[2];
+    let [arg1, arg2, ...arg3] = val.split(' ');
+    if (arg3) {
+      arg3 = arg3.join(' ');
+    }
     const date = moment().format('DD-MM-YYYY');
     if (!argCheckValid(val)) {
       msg.channel.send({
         embed: {
           color: 0x81b214,
-          description: '-vaccine [pincode] [clear]',
+          description: '-vaccine [clear] | [pincode] | [state] [district]',
           title: '-vaccine Usage',
           fields: [{
               name: 'pincode',
-              value: 'The Pincode to check/start polling',
+              value: 'The Pincode to check/start polling, \nex - "vaccine 560103"',
+            }, {
+              name: 'state district',
+              value: 'If you want to search for state/district (case insensitive), \nex - "vaccine karnataka bangalore urban"',
             }, {
               name: 'clear',
-              value: 'If you want to clear polling for the pin mentioned',
+              value: 'If you want to clear polling for the pin/state,district mentioned, \nex - "vaccine clear 560103"',
             }, {
               name: 'Currently Polling for',
               value: Object.keys(pollIntervals).length ? Object.keys(pollIntervals).join(', ') : 'None',
@@ -66,32 +76,64 @@ bot.on('message', msg => {
       return;
     }
 
-    const params = { pincode, date };
+    /**
+     * The unique key for identifying what is being polled for.
+     */
+    let key;
+    const params = { date };
+
+    // Generate params, keys from the arguments.
+    if (arg2 === 'clear') {
+      if (isValidPincode(arg3)) {
+        key = arg3;
+      } else {
+        let [state, ...district] = arg3.split(' ');
+        key = `${state}/${district.join(' ')}`;
+      }
+    } else {
+      if (isValidPincode(arg2)) {
+        key = arg2;
+        params.url = 'https://cdn-api.co-vin.in/api/v2/appointment/sessions/public/calendarByPin';
+        params.pincode = arg2;
+      } else {
+        key = `${arg2.toLocaleLowerCase()}/${arg3.toLocaleLowerCase()}`;
+        params.url = 'https://cdn-api.co-vin.in/api/v2/appointment/sessions/calendarByDistrict';
+      }
+    }
 
     /**
      * Get list of centers available.
+     *
      * @param first If its the first time the function is being called.
      */
     const getList = (first) => {
-      if (!first) console.log('Polling for', pincode);
-      const pollingStarted = !!pollIntervals[pincode];
+      if (!first) console.log('Polling for', key);
+      const pollingStarted = !!pollIntervals[key];
 
-      if (first && !pollingStarted && !pollStats[pincode]) {
-        pollStats[pincode] = {
+      // Setups polling stats.
+      if (first && !pollStats[key]) {
+        pollStats[key] = {
           success: 0,
           fail: 0,
         };
-        oldPollStats[pincode] = {...pollStats[pincode]};
+        oldPollStats[key] = {...pollStats[key]};
       }
 
-      getCenters(params, res => {
-        const availabilityCheck = a => a.min_age_limit !== 45 && a.available_capacity !== 0;
+      getRequest(params, (res, err) => {
+        const availabilityCheck = a => a.min_age_limit === 45 && a.available_capacity !== 0;
         const availableCenters = (res.centers || []).filter(center => center.sessions.find(availabilityCheck));
 
         const embedMessage = {
           color: 0x81b214,
           fields: [],
         };
+
+        // Populate polling stats
+        if (err) {
+          pollStats[key].fail++;
+        } else {
+          pollStats[key].success++;
+        }
 
         if (availableCenters.length === 0 && first) {
           embedMessage.fields.push({
@@ -106,25 +148,25 @@ bot.on('message', msg => {
 
           embedMessage.fields.push({
             name: '✅ Polls',
-            value: `${pollStats[pincode].success} (+${pollStats[pincode].success - oldPollStats[pincode].success})`,
+            value: `${pollStats[key].success} (+${pollStats[key].success - oldPollStats[key].success})`,
             inline: true,
           });
 
           embedMessage.fields.push({
             name: '❌ Polls',
-            value: `${pollStats[pincode].fail} (+${pollStats[pincode].fail - oldPollStats[pincode].fail})`,
+            value: `${pollStats[key].fail} (+${pollStats[key].fail - oldPollStats[key].fail})`,
             inline: true,
           });
 
           if (pollingStarted) {
-            oldPollStats[pincode] = {...pollStats[pincode]};
+            oldPollStats[key] = {...pollStats[key]};
           }
 
           embedMessage.color = pollingStarted ? 0x00adb5 : 0xfb3640;
           msg.channel.send({ embed: embedMessage });
         } else if (availableCenters.length !== 0) {
           msg.channel.send({ embed: {
-            title: 'GOTDAM VACCINE SLOTS AVAILABLE',
+            title: ':warning: GOTDAM VACCINE SLOTS AVAILABLE :warning:',
             description: 'Start booking lmao, what you looking at?',
             color: 0xf8f5f1,
           }});
@@ -140,36 +182,61 @@ bot.on('message', msg => {
               .forEach(ses => {
                 embedMessage.fields.push({
                   name: `${moment(ses.date).format('D MMM YYYY')} (${ses.available_capacity} Slots)`,
-                  value: ses.slots.join(', '),
+                  value: ses.slots.join(', ') || 'None',
                   inline: true,
                 });
               });
 
             msg.channel.send({ embed: embedMessage });
-            clearInterval(pollIntervals[pincode]);
-            pollIntervals[pincode] = null;
-          })
+          });
+
+          // Clear polling if found.
+          clearInterval(pollIntervals[key]);
+          delete pollIntervals[key];
         }
       });
+
+      // Setup polling.
+      if (!pollIntervals[key]) {
+        pollIntervals[key] = setInterval(getList, INTERVAL);
+      }
     }
 
-    if (pollClear !== 'clear') {
-      getList(true);
+    if (!(arg2 === 'clear')) {
 
-      if (!pollIntervals[pincode]) {
-        pollIntervals[pincode] = setInterval(getList, INTERVAL);
+      if (params.pincode) {
+        getList(true);
+      } else {
+        // Callback hell ik, we can't use promise based library :(
+        getStates(() =>
+          getDistricts(arg2,
+            function callback(err) {
+              params.district_id = findDistrict(arg2, arg3).district_id;
+
+              // Show error message, if any error occurs.
+              if (err || !params.district_id) {
+                msg.channel.send({embed: {
+                  description: `Wrong state or district ${arg2} ${arg3}, wyd even?`,
+                }});
+                return;
+              }
+
+              // GETS THE FINAL LIST.
+              getList(true);
+            }));
       }
     } else {
-      if (pollIntervals[pincode]) {
+      // Clear polling conditionally.
+      if (pollIntervals[key]) {
         msg.channel.send({embed: {
-          description: `Cleared Polling for ${pincode}`,
+          description: `Cleared Polling for ${key}`,
         }});
 
-        clearInterval(pollIntervals[pincode]);
-        pollIntervals[pincode] = null;
+        clearInterval(pollIntervals[key]);
+        delete pollIntervals[key];
       } else {
         msg.channel.send({embed: {
-          description: `No polling started for ${pincode}, wyd even?`,
+          description: `No polling started for ${key}, wyd even?`,
         }});
       }
     }
@@ -180,15 +247,96 @@ bot.on('message', msg => {
  * Checks if the arguments passed is valid or not
  *
  * @param message the current message.
+ * @returns True, if args are valid.
  */
 function argCheckValid(message) {
-  const [arg1, arg2, arg3] = message.split(' ');
+  const [arg1, arg2, arg3, ...arg4] = message.split(' ');
 
   if (!arg2) return false;
-  if (!/^[1-9]{1}[0-9]{5}$/.test(arg2)) return false; // Match PINCODE
-  if (arg3 && arg3 !== 'clear') return false;
+  if (arg2 === 'clear' && !isValidPincode(arg3) && !arg4) return false;
 
   return true;
+}
+
+/**
+ * Checks if the pin is valid or not.
+ *
+ * @param pin The Pincode to check.
+ * @returns True, if pin is valid.
+ */
+function isValidPincode(pin) {
+  return /^[1-9]{1}[0-9]{5}$/.test(pin);
+}
+
+/**
+ * Gets the list of states.
+ *
+ * @param cb The callback function.
+ */
+function getStates(cb) {
+  // Early return if statesData exists.
+  if (statesData) {
+    cb();
+    return;
+  }
+
+  getRequest({url: 'https://cdn-api.co-vin.in/api/v2/admin/location/states'}, res => {
+    statesData = {};
+    res.states.forEach(state => {
+      statesData[state.state_id] = state;
+    });
+    cb();
+  });
+}
+
+/**
+ * Gets the list of district for the given state.
+ *
+ * @param state The state to check
+ * @param cb    The callback function
+ */
+function getDistricts(state, cb){
+  const stateId = findState(state).state_id;
+
+  // Return error if not found.
+  if (!stateId || !statesData[stateId]) {
+    cb(true);
+    return;
+  }
+
+  // Early return if found.
+  if (statesData[stateId].districts) {
+    cb();
+    return;
+  }
+
+  getRequest({url: `https://cdn-api.co-vin.in/api/v2/admin/location/districts/${stateId}` }, d => {
+    statesData[stateId].districts = (d || {}).districts;
+    cb();
+  });
+}
+
+/**
+ * Find the state object from the statesData.
+ *
+ * @param state The state to find.
+ * @returns The selected state, if any.
+ */
+function findState(state) {
+  return Object.values(statesData).find(s => s.state_name.toLowerCase() === state.toLowerCase()) || {};
+}
+
+/**
+ * Find the district object from the statesData.
+ *
+ * @param state    The state of the district.
+ * @param district The district to find.
+ * @returns The selected district, if any.
+ */
+function findDistrict(state, district) {
+  const stateId = findState(state).state_id;
+  if (!stateId) return {};
+  return statesData[stateId].districts.find(d => d.district_name.toLowerCase() === district.toLowerCase()) || {};
 }
 
 /**
@@ -197,17 +345,21 @@ function argCheckValid(message) {
  * @param params The URL params.
  * @param callback The callback function.
  */
-function getCenters(params, callback) {
-  const url = new URL('https://cdn-api.co-vin.in/api/v2/appointment/sessions/public/calendarByPin');
+function getRequest(params, callback) {
+  const urlObj = new URL(params.url);
+  const { url, ...searchParams } = params;
 
   // Set the url params.
-  Object.keys(params).forEach(key => url.searchParams.set(key, params[key]));
+  Object.keys(searchParams).forEach(key => urlObj.searchParams.set(key, params[key]));
 
+  // The request options.
   const options = {
-    hostname: url.hostname,
+    hostname: urlObj.hostname,
     port: 443,
-    path: `${url.pathname}${url.search}`,
+    path: `${urlObj.pathname}${urlObj.search}`,
     method: 'GET',
+
+    // Add user-agent header to bypass sometimes 403 errors.
     headers: {
       'Content-Type': 'application/json',
       'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36',
@@ -217,18 +369,17 @@ function getCenters(params, callback) {
   // Make the API call.
   const req = https.request(options, res => {
     res.setEncoding('utf8')
-    let response;
+    let response = '';
 
-    res.on('data', res => response = res);
+    res.on('data', res => response = response + res);
 
     res.on('end', d => {
+      console.log(res.statusCode, `${urlObj.pathname}${urlObj.search}`);
+
       if (res.statusCode != 200) {
-        pollStats[params.pincode].fail++;
-        console.log('Error', res.statusCode);
         callback({}, true);
       } else {
-        pollStats[params.pincode].success++;
-        callback(JSON.parse(response));
+        callback(typeof response === 'string' ? JSON.parse(response) : response);
       }
     })
   });
